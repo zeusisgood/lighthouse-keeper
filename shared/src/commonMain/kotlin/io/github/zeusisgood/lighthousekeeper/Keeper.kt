@@ -55,6 +55,7 @@ class Keeper(private val scope: CoroutineScope, storePath: String) {
     /** 登録デバイス。読み込み前は null */
     val devices = repo.devices.stateIn(scope, SharingStarted.Eagerly, null)
     val timeoutSeconds = repo.timeoutSeconds.stateIn(scope, SharingStarted.Eagerly, 60)
+    val onboarded = repo.onboarded.stateIn(scope, SharingStarted.Eagerly, null)
 
     val power = PowerController(scope, this)
 

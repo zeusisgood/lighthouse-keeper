@@ -1,6 +1,7 @@
 package io.github.zeusisgood.lighthousekeeper
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -17,8 +18,15 @@ class Repository(path: String) {
     private val store = PreferenceDataStoreFactory.createWithPath { path.toPath() }
     private val devicesKey = stringPreferencesKey("devices")
     private val timeoutKey = intPreferencesKey("timeoutSeconds")
+    private val onboardedKey = booleanPreferencesKey("onboarded")
 
     val devices = store.data.map { decode(it[devicesKey]) }
+
+    /** 初回の権限説明を済ませたか */
+    val onboarded = store.data.map { it[onboardedKey] ?: false }
+    suspend fun setOnboarded() {
+        store.edit { it[onboardedKey] = true }
+    }
 
     /** 1台ごとのタイムアウト秒数（10〜180、デフォルト60） */
     val timeoutSeconds = store.data.map { it[timeoutKey] ?: 60 }

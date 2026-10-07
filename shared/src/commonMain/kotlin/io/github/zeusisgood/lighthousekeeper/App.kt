@@ -1,7 +1,9 @@
 package io.github.zeusisgood.lighthousekeeper
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -46,8 +49,15 @@ sealed interface Screen {
 }
 
 @Composable
-fun App(keeper: Keeper, version: String) {
+fun App(
+    keeper: Keeper,
+    version: String,
+    bluetoothGranted: Boolean,
+    onRequestPermissions: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
+    val onboarded = keeper.onboarded.collectAsState().value
     PlatformBackHandler(enabled = screen != Screen.List) { screen = if (screen == Screen.Log) Screen.Settings else Screen.List }
     MaterialTheme(
         colorScheme = darkColorScheme(
@@ -56,14 +66,42 @@ fun App(keeper: Keeper, version: String) {
         )
     ) {
         Box(Modifier.fillMaxSize().background(Background).safeDrawingPadding()) {
-            when (val s = screen) {
-                Screen.List -> ListScreen(keeper, onAdd = { screen = Screen.Add }, onSettings = { screen = Screen.Settings })
-                Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Alias(it) }, onBack = { screen = Screen.List })
-                is Screen.Alias -> AliasScreen(keeper, s.address, onDone = { screen = Screen.List })
-                Screen.Settings -> SettingsScreen(keeper, version, onLog = { screen = Screen.Log }, onBack = { screen = Screen.List })
-                Screen.Log -> LogScreen(onBack = { screen = Screen.Settings })
+            when {
+                onboarded == null -> {} // 読み込み中
+                !onboarded -> PermissionScreen(onRequestPermissions)
+                else -> when (val s = screen) {
+                    Screen.List -> Column {
+                        if (!bluetoothGranted) PermissionBanner(onOpenAppSettings)
+                        ListScreen(keeper, onAdd = { screen = Screen.Add }, onSettings = { screen = Screen.Settings })
+                    }
+                    Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Alias(it) }, onBack = { screen = Screen.List })
+                    is Screen.Alias -> AliasScreen(keeper, s.address, onDone = { screen = Screen.List })
+                    Screen.Settings -> SettingsScreen(keeper, version, onLog = { screen = Screen.Log }, onBack = { screen = Screen.List })
+                    Screen.Log -> LogScreen(onBack = { screen = Screen.Settings })
+                }
             }
         }
+    }
+}
+
+/** 初回起動: 権限の説明（1枚）。許可・拒否どちらでも一覧へ進む */
+@Composable
+private fun PermissionScreen(onRequest: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically)) {
+        Text("Lighthouse Keeper", fontSize = 24.sp, color = TextColor)
+        Text("ベースステーションの状態を読み取り、ON/スリープを切り替えるために次の権限を使います。", color = TextColor)
+        Text("・付近のデバイス（Bluetooth）: 必須。位置情報は使いません", color = TextColor)
+        Text("・通知: 任意。処理中と失敗を知らせます。許可しなくても切り替えは動きます", color = TextColor)
+        BigButton("許可する", OnColor, Modifier.fillMaxWidth(), onClick = onRequest)
+    }
+}
+
+/** Bluetooth 権限が拒否されているときに一覧の上に出す */
+@Composable
+private fun PermissionBanner(onOpenAppSettings: () -> Unit) {
+    Row(Modifier.fillMaxWidth().background(CardColor).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("付近のデバイスの権限がないため、状態の取得と切り替えができません", color = ErrorColor, modifier = Modifier.weight(1f))
+        TextButton(onClick = onOpenAppSettings) { Text("設定を開く") }
     }
 }
 
