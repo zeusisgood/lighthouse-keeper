@@ -5,18 +5,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## プロジェクト概要
 
 Valve Lighthouse（SteamVR Base Station 2.0）の電源をBLEでON/スリープ切り替えするAndroidアプリ「Lighthouse Keeper」。
-**最優先の価値は「確実に切り替わること」**。要件の正本は `docs/lighthouse-keeper_handoff.md`（雛形作成時に `docs/handoff.md` へ移す予定）。仕様の詳細（GATT UUID、状態値、画面、権限、配色）はそちらを参照し、ここには重複させない。
+**最優先の価値は「確実に切り替わること」**。要件の正本は `docs/handoff.md`。仕様の詳細（GATT UUID、状態値、画面、権限、配色）はそちらを参照し、ここには重複させない。
 
 - Kotlin Multiplatform + Compose Multiplatform、BLEはKable、永続化はDataStore
 - 対象はAndroidのみ（minSdk 31）。ただしBLE/ドメイン層は `commonMain` に置き、将来のiOS追加を妨げない
 - パッケージ名: `io.github.zeusisgood.lighthousekeeper`
+- モジュール: `shared`（KMPライブラリ。UI・ドメイン・BLE。`commonMain` 中心）/ `androidApp`（Activity・Manifest・Service などAndroid固有の入口）
+- compileSdk は devcontainer の SDK 36 に合わせる。Compose MP 1.12 以降は compileSdk 37 を要求するため 1.11 系に固定している
 
 ## コマンド
 
 ビルド・テストはdevcontainer内で行う（JDK 17 / Android SDK 36、エミュレーターなし）。
 
 ```bash
-./gradlew assembleDebug        # APK: app/build/outputs/apk/debug/（モジュール名は雛形作成後に確定）
+./gradlew assembleDebug        # APK: androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ./gradlew test                 # 単体テスト
 ./gradlew test --tests "*AdvertisementParser*"   # 単一テスト
 ```
