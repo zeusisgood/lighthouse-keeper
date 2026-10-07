@@ -1,5 +1,6 @@
 package io.github.zeusisgood.lighthousekeeper
 
+import com.juul.kable.Advertisement
 import com.juul.kable.Filter
 import com.juul.kable.Scanner
 import kotlinx.coroutines.CoroutineScope
@@ -20,10 +21,22 @@ import kotlin.time.Instant
 /** 最後に受信したアドバタイズ。power は 0x01（Booting）を受けても直前の値のまま、raw は受信値そのまま */
 data class Seen(val name: String?, val power: PowerState, val raw: PowerState, val at: Instant)
 
-enum class Display { Unknown, Off, On }
+enum class Display { Unknown, Off, On, Busy, Error }
 
 /** この時間アドバタイズを受信しなければ「不明」 */
 val STALE_AFTER = 10.seconds
+
+/** docs/architecture/03-state-machine.md */
+fun display(seen: Seen?, task: Task?, now: Instant): Display {
+    val fresh = seen != null && now - seen.at <= STALE_AFTER
+    return when {
+        task == null -> display(seen, now)
+        !task.failed -> Display.Busy
+        // エラーは次の操作か、もともとの目標値を受信するまで保持
+        fresh && seen.raw.isTarget(task.on) -> display(seen, now)
+        else -> Display.Error
+    }
+}
 
 fun display(seen: Seen?, now: Instant): Display = when {
     seen == null || now - seen.at > STALE_AFTER -> Display.Unknown
@@ -36,6 +49,12 @@ fun display(seen: Seen?, now: Instant): Display = when {
 
 /** アプリ全体で1つ。スキャン結果（＝状態の唯一の情報源）を持つ */
 class Keeper(scope: CoroutineScope) {
+    val power = PowerController(scope, this)
+
+    // 接続時に使う（static random アドレスの種別をスキャン結果から引き継ぐため）。スキャンもMainで動くのでロック不要
+    private val advertisements = mutableMapOf<String, Advertisement>()
+    fun lastAdvertisement(address: String) = advertisements[address]
+
     private val _seen = MutableStateFlow<Map<String, Seen>>(emptyMap())
     val seen = _seen.asStateFlow()
 
@@ -47,7 +66,10 @@ class Keeper(scope: CoroutineScope) {
         filters { match { manufacturerData = listOf(Filter.ManufacturerData(VALVE_COMPANY_ID, byteArrayOf())) } }
         platformScanSettings()
     }.advertisements
-        .onEach { ad -> onAdvertisement(ad.identifier.toString(), ad.name, ad.manufacturerData(VALVE_COMPANY_ID)) }
+        .onEach { ad ->
+            advertisements[ad.identifier.toString()] = ad
+            onAdvertisement(ad.identifier.toString(), ad.name, ad.manufacturerData(VALVE_COMPANY_ID))
+        }
         .map { }
         .retryWhen { e, _ ->
             // 権限なし・Bluetooth OFF など。回数制限（30秒で5回）に掛からない間隔で再開する
