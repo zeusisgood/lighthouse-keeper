@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
 @Composable
-fun ListScreen(keeper: Keeper, onAdd: () -> Unit) {
+fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit) {
     val devices = keeper.devices.collectAsState().value ?: return
     val seen by keeper.seen.collectAsState()
     val tasks by keeper.power.tasks.collectAsState()
@@ -44,6 +44,7 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TopBar("Lighthouse Keeper") {
             TextButton(onClick = onAdd) { Text("＋", fontSize = 22.sp, color = TextColor) }
+            TextButton(onClick = onSettings) { Text("⚙", fontSize = 22.sp, color = TextColor) }
         }
         if (devices.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {

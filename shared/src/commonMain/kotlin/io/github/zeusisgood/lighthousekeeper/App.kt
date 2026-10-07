@@ -41,12 +41,14 @@ sealed interface Screen {
     data object List : Screen
     data object Add : Screen
     data class Alias(val address: String) : Screen
+    data object Settings : Screen
+    data object Log : Screen
 }
 
 @Composable
-fun App(keeper: Keeper) {
+fun App(keeper: Keeper, version: String) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
-    PlatformBackHandler(enabled = screen != Screen.List) { screen = Screen.List }
+    PlatformBackHandler(enabled = screen != Screen.List) { screen = if (screen == Screen.Log) Screen.Settings else Screen.List }
     MaterialTheme(
         colorScheme = darkColorScheme(
             background = Background, onBackground = TextColor,
@@ -55,9 +57,11 @@ fun App(keeper: Keeper) {
     ) {
         Box(Modifier.fillMaxSize().background(Background).safeDrawingPadding()) {
             when (val s = screen) {
-                Screen.List -> ListScreen(keeper, onAdd = { screen = Screen.Add })
+                Screen.List -> ListScreen(keeper, onAdd = { screen = Screen.Add }, onSettings = { screen = Screen.Settings })
                 Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Alias(it) }, onBack = { screen = Screen.List })
                 is Screen.Alias -> AliasScreen(keeper, s.address, onDone = { screen = Screen.List })
+                Screen.Settings -> SettingsScreen(keeper, version, onLog = { screen = Screen.Log }, onBack = { screen = Screen.List })
+                Screen.Log -> LogScreen(onBack = { screen = Screen.Settings })
             }
         }
     }

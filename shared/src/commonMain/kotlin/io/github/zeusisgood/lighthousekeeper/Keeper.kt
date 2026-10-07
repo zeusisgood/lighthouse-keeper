@@ -5,6 +5,7 @@ import com.juul.kable.Filter
 import com.juul.kable.Scanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,8 +54,13 @@ class Keeper(private val scope: CoroutineScope, storePath: String) {
     val repo = Repository(storePath)
     /** 登録デバイス。読み込み前は null */
     val devices = repo.devices.stateIn(scope, SharingStarted.Eagerly, null)
+    val timeoutSeconds = repo.timeoutSeconds.stateIn(scope, SharingStarted.Eagerly, 60)
 
     val power = PowerController(scope, this)
+
+    init {
+        scope.launch { timeoutSeconds.collect { power.timeout = it.seconds } }
+    }
 
     // 接続時に使う（static random アドレスの種別をスキャン結果から引き継ぐため）。スキャンもMainで動くのでロック不要
     private val advertisements = mutableMapOf<String, Advertisement>()

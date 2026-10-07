@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
             .launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT))
         // 画面表示中はスキャンしっぱなし
         lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { keeper.scan.collect {} } }
-        setContent { App(keeper) }
+        val version = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+        setContent { App(keeper, version) }
     }
 }
