@@ -1,0 +1,25 @@
+{
+  "name": "Lighthouse Keeper",
+  "build": { "dockerfile": "Dockerfile" },
+  "remoteUser": "vscode",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "fwcd.kotlin",
+        "vscjava.vscode-gradle",
+        "bierner.markdown-mermaid"
+      ]
+    }
+  },
+
+  // Ponytailをプロジェクトスコープで入れる（コンテナを作り直すたびに自動で実行）
+  "postCreateCommand": "claude plugin marketplace add DietrichGebert/ponytail && claude plugin install ponytail@ponytail --scope project || echo 'Ponytailのインストールに失敗。コンテナ内で手動実行してください'"
+}
