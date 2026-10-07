@@ -1,6 +1,8 @@
 package io.github.zeusisgood.lighthousekeeper
 
 import android.bluetooth.le.ScanSettings
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
 import com.juul.kable.ScannerBuilder
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -18,3 +20,6 @@ actual fun platformLog(line: String) {
 internal actual fun ScannerBuilder.platformScanSettings() {
     scanSettings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
 }
+
+@Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) = BackHandler(enabled, onBack)

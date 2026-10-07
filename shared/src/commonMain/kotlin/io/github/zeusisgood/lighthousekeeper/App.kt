@@ -1,30 +1,25 @@
 package io.github.zeusisgood.lighthousekeeper
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 val Background = Color(0xFF121417)
 val CardColor = Color(0xFF1E2228)
@@ -42,16 +36,29 @@ val BusyColor = Color(0xFF38BDF8)
 val ErrorColor = Color(0xFFF87171)
 val TextColor = Color(0xFFE5E7EB)
 
+/** 画面遷移（docs/architecture/04-screen-flow.md） */
+sealed interface Screen {
+    data object List : Screen
+    data object Add : Screen
+    data class Alias(val address: String) : Screen
+}
+
 @Composable
 fun App(keeper: Keeper) {
+    var screen by remember { mutableStateOf<Screen>(Screen.List) }
+    PlatformBackHandler(enabled = screen != Screen.List) { screen = Screen.List }
     MaterialTheme(
         colorScheme = darkColorScheme(
             background = Background, onBackground = TextColor,
-            surface = Background, onSurface = TextColor, primary = BusyColor,
+            surface = CardColor, onSurface = TextColor, primary = BusyColor,
         )
     ) {
         Box(Modifier.fillMaxSize().background(Background).safeDrawingPadding()) {
-            ListScreen(keeper)
+            when (val s = screen) {
+                Screen.List -> ListScreen(keeper, onAdd = { screen = Screen.Add })
+                Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Alias(it) }, onBack = { screen = Screen.List })
+                is Screen.Alias -> AliasScreen(keeper, s.address, onDone = { screen = Screen.List })
+            }
         }
     }
 }
@@ -66,66 +73,18 @@ fun rememberNow() = produceState(Clock.System.now()) {
 }
 
 @Composable
-private fun ListScreen(keeper: Keeper) {
-    val seen by keeper.seen.collectAsState()
-    val tasks by keeper.power.tasks.collectAsState()
-    val now by rememberNow()
-    // ponytail: 段階5で登録済みデバイスの一覧に置き換える。今はスキャンで見えた全台
-    val devices = seen.entries.filter { it.value.name?.startsWith("LHB-") == true }.sortedBy { it.value.name }.map { it.key }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BigButton("全部ON", OnColor, Modifier.weight(1f)) { devices.forEach { keeper.power.set(it, true) } }
-            BigButton("全部OFF", OffColor, Modifier.weight(1f)) { devices.forEach { keeper.power.set(it, false) } }
-        }
-        if (devices.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("ベースステーションを探しています…", color = OffColor)
-            }
-        }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(devices, key = { it }) { address ->
-                val s = seen[address]
-                DeviceCard(
-                    title = s?.name ?: address, subtitle = address, seen = s, task = tasks[address], now = now,
-                    onToggle = { keeper.power.set(address, it) },
-                )
-            }
-        }
+fun TopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) TextButton(onClick = onBack) { Text("←", fontSize = 22.sp, color = TextColor) }
+        Text(title, fontSize = 20.sp, color = TextColor, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+        actions()
     }
 }
 
 @Composable
-private fun BigButton(text: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun BigButton(text: String, color: Color, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
-        onClick = onClick, modifier = modifier.height(64.dp),
+        onClick = onClick, modifier = modifier.height(64.dp), enabled = enabled,
         colors = ButtonDefaults.buttonColors(containerColor = CardColor, contentColor = color),
     ) { Text(text, fontSize = 18.sp) }
-}
-
-@Composable
-private fun DeviceCard(title: String, subtitle: String, seen: Seen?, task: Task?, now: Instant, onToggle: (Boolean) -> Unit) {
-    val display = display(seen, task, now)
-    Card(colors = CardDefaults.cardColors(containerColor = CardColor), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 20.sp, color = TextColor)
-                Text(subtitle, fontSize = 12.sp, color = OffColor)
-                Text("最終確認 ${seen?.let { formatTime(it.at) } ?: "-"}", fontSize = 12.sp, color = OffColor)
-            }
-            val (label, color) = when (display) {
-                Display.On -> "ON" to OnColor
-                Display.Off -> "OFF" to OffColor
-                Display.Busy -> "処理中（${(now - task!!.startedAt).inWholeSeconds}秒）" to BusyColor
-                Display.Error -> "エラー" to ErrorColor
-                Display.Unknown -> "不明" to OffColor
-            }
-            Text(label, color = color, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
-            Switch(
-                // 処理中・エラーは目標側に倒しておく
-                checked = if (task != null && display != Display.On && display != Display.Off) task.on else display == Display.On,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(checkedTrackColor = OnColor),
-            )
-        }
-    }
 }

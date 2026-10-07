@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -47,8 +48,12 @@ fun display(seen: Seen?, now: Instant): Display = when {
     }
 }
 
-/** アプリ全体で1つ。スキャン結果（＝状態の唯一の情報源）を持つ */
-class Keeper(scope: CoroutineScope) {
+/** アプリ全体で1つ。登録デバイスとスキャン結果（＝状態の唯一の情報源）を持つ */
+class Keeper(private val scope: CoroutineScope, storePath: String) {
+    val repo = Repository(storePath)
+    /** 登録デバイス。読み込み前は null */
+    val devices = repo.devices.stateIn(scope, SharingStarted.Eagerly, null)
+
     val power = PowerController(scope, this)
 
     // 接続時に使う（static random アドレスの種別をスキャン結果から引き継ぐため）。スキャンもMainで動くのでロック不要

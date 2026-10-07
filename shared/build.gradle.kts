@@ -22,6 +22,9 @@ kotlin {
             implementation(libs.kable.core)
             implementation(libs.datastore.preferences.core)
         }
+        androidMain.dependencies {
+            implementation(libs.activity.compose)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }

@@ -4,5 +4,5 @@ import android.app.Application
 import kotlinx.coroutines.MainScope
 
 class KeeperApp : Application() {
-    val keeper by lazy { Keeper(MainScope()) }
+    val keeper by lazy { Keeper(MainScope(), filesDir.resolve("keeper.preferences_pb").path) }
 }
