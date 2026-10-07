@@ -12,6 +12,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
     <application
+        android:name=".KeeperApp"
         android:label="Keeper"
         android:theme="@style/Theme.Keeper">
         <activity
