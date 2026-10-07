@@ -19,7 +19,7 @@ flowchart TB
             Repo["Repository（DataStore）<br/>登録デバイス / タイムアウト秒数"]
         end
         subgraph androidMain["androidMain"]
-            Platform["DataStore のファイル置き場など<br/>Android 依存の小さな実装"]
+            Platform["Android 依存の小さな実装<br/>スキャン設定（低遅延）/ 時刻表示 / logcat / 戻るボタン"]
         end
     end
 
@@ -33,10 +33,11 @@ flowchart TB
     Domain --> Repo
     Ble --> Parser
     Ble <-->|"アドバタイズ受信<br/>GATT Write"| Lighthouse
-    Repo --> Platform
+    UI --> Platform
+    Ble --> Platform
 ```
 
 - 画面・ドメイン・BLE・永続化はすべて `shared/commonMain` に置く。iOS を足すときは `iosMain` と iOS アプリを追加するだけで済む形にする
-- `androidApp` は Activity・Foreground Service・通知だけを持つ。書き込み処理の本体はドメイン層にあり、Service はそれを「アプリを閉じても動かし続ける」ための入れ物
+- `androidApp` は Activity・Foreground Service・通知と、DataStore のファイルパスの受け渡しだけを持つ。書き込み処理の本体はドメイン層にあり、Service はそれを「アプリを閉じても動かし続ける」ための入れ物
 - 状態は BLE 層のスキャン結果（アドバタイズ）だけから得る。GATT Read は使わない
 - スキャンは「画面表示中」または「処理中」のどちらかが真の間ずっと開始したまま。画面と Service で同じスキャンを共有し、頻繁に start/stop しない

@@ -19,8 +19,8 @@ Valve Lighthouse（SteamVR Base Station 2.0）の電源をBLEでON/スリープ�
 
 ```bash
 ./gradlew assembleDebug        # APK: androidApp/build/outputs/apk/debug/androidApp-debug.apk
-./gradlew test                 # 単体テスト
-./gradlew test --tests "*AdvertisementParser*"   # 単一テスト
+./gradlew :shared:testAndroidHostTest   # 単体テスト（commonTest。`./gradlew test` では走らない）
+./gradlew :shared:testAndroidHostTest --tests "*AdvertisementParser*"   # 単一テスト
 ```
 
 - 実機テストはユーザーが手動で行う。各段階の終わりに **APKのパスと実機での確認手順** を提示する
