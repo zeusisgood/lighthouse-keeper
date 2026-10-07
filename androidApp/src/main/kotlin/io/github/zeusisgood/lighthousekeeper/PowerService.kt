@@ -68,23 +68,17 @@ class PowerService : Service() {
         scope.cancel()
     }
 
-    private fun progress(text: String) = Notification.Builder(this, CHANNEL_PROGRESS)
-        .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-        .setContentTitle(text)
-        .setContentIntent(openApp())
-        .setOngoing(true)
-        .build()
+    private fun progress(text: String) = notification(CHANNEL_PROGRESS, android.R.drawable.stat_sys_data_bluetooth, text, ongoing = true)
+    private fun failure(text: String) = notification(CHANNEL_FAILURE, android.R.drawable.stat_notify_error, text, ongoing = false)
 
-    private fun failure(text: String) = Notification.Builder(this, CHANNEL_FAILURE)
-        .setSmallIcon(android.R.drawable.stat_notify_error)
+    /** 処理中は消せない通知、失敗はタップかスワイプで消える通知。どちらもタップでアプリを開く */
+    private fun notification(channel: String, icon: Int, text: String, ongoing: Boolean) = Notification.Builder(this, channel)
+        .setSmallIcon(icon)
         .setContentTitle(text)
-        .setContentIntent(openApp())
-        .setAutoCancel(true)
+        .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
+        .setOngoing(ongoing)
+        .setAutoCancel(!ongoing)
         .build()
-
-    private fun openApp() = PendingIntent.getActivity(
-        this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
-    )
 
     companion object {
         const val CHANNEL_PROGRESS = "progress"

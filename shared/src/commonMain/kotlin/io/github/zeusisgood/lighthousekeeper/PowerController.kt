@@ -22,7 +22,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -54,9 +53,6 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
     private val _tasks = MutableStateFlow<Map<String, Task>>(emptyMap())
     val tasks = _tasks.asStateFlow()
 
-    /** 1台ごとのタイムアウト（設定で 10〜180 秒） */
-    var timeout: Duration = 60.seconds
-
     private val jobs = mutableMapOf<String, Job>()
     private val connectLock = Mutex()
 
@@ -71,6 +67,7 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
             return
         }
         _tasks.update { it + (address to Task(on, now)) }
+        val timeout = keeper.timeoutSeconds.value.seconds // 1台ごと（設定で 10〜180 秒）
         jobs[address] = scope.launch {
             Log.add("$address ${on.label()} 開始（タイムアウト ${timeout.inWholeSeconds}秒）")
             val scanning = launch { keeper.scan.collect {} } // 画面を閉じても処理中はスキャンを続ける
@@ -111,9 +108,10 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
         var attempt = 0
         while (true) {
             attempt++
-            val peripheral = keeper.lastAdvertisement(address)?.let { Peripheral(it) } ?: Peripheral(address.toIdentifier())
+            val peripheral = keeper.advertisements[address]?.let { Peripheral(it) } ?: Peripheral(address.toIdentifier())
             try {
-                if (SERIAL_CONNECT) connectLock.withLock { connect(peripheral) } else connect(peripheral)
+                val connect = suspend { withTimeout(CONNECT_TIMEOUT) { peripheral.connect() } }
+                if (SERIAL_CONNECT) connectLock.withLock { connect() } else connect()
                 peripheral.write(characteristic, byteArrayOf(value.toByte()), WriteType.WithResponse)
                 Log.add("$address $what 書き込み 0x${value.toString(16).padStart(2, '0')}（${attempt}回目）")
                 return Clock.System.now()
@@ -128,10 +126,6 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
             }
             delay(CONNECT_RETRY_INTERVAL)
         }
-    }
-
-    private suspend fun connect(peripheral: Peripheral) {
-        withTimeout(CONNECT_TIMEOUT) { peripheral.connect() }
     }
 }
 

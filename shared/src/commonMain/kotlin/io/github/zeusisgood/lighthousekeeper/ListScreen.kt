@@ -1,6 +1,5 @@
 package io.github.zeusisgood.lighthousekeeper
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,7 +70,6 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit) {
     editing?.let { device -> EditDialog(keeper, device, onDismiss = { editing = null }) }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle: (Boolean) -> Unit, onLongClick: () -> Unit) {
     val display = display(seen, task, now)
