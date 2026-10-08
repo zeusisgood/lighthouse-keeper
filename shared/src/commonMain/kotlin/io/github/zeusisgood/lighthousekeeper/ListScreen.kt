@@ -1,6 +1,6 @@
 package io.github.zeusisgood.lighthousekeeper
 
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -21,24 +19,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
 @Composable
-fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit) {
+fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit, onDevice: (String) -> Unit) {
     val devices = keeper.devices.collectAsState().value ?: return
     val seen by keeper.seen.collectAsState()
     val tasks by keeper.power.tasks.collectAsState()
     val now by rememberNow()
-    var editing by remember { mutableStateOf<Device?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Lighthouse Keeper") {
@@ -61,21 +53,21 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit) {
                     DeviceCard(
                         device, seen[device.address], tasks[device.address], now,
                         onToggle = { keeper.power.set(device.address, it) },
-                        onLongClick = { editing = device },
+                        onClick = { onDevice(device.address) },
                     )
                 }
             }
         }
     }
-    editing?.let { device -> EditDialog(keeper, device, onDismiss = { editing = null }) }
 }
 
+/** 一覧のカード。詳細画面では onClick なしで状態表示とトグルに使う */
 @Composable
-private fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle: (Boolean) -> Unit, onLongClick: () -> Unit) {
+fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle: (Boolean) -> Unit, onClick: (() -> Unit)? = null) {
     val display = display(seen, task, now)
     Card(
         colors = CardDefaults.cardColors(containerColor = CardColor),
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = {}, onLongClick = onLongClick),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = onClick != null) { onClick?.invoke() },
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -99,21 +91,4 @@ private fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, o
             )
         }
     }
-}
-
-@Composable
-private fun EditDialog(keeper: Keeper, device: Device, onDismiss: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var alias by remember { mutableStateOf(device.alias) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(device.name) },
-        text = { OutlinedTextField(alias, { alias = it }, label = { Text("別名") }, singleLine = true) },
-        confirmButton = {
-            TextButton(onClick = { scope.launch { keeper.repo.rename(device.address, alias.trim()); onDismiss() } }) { Text("保存") }
-        },
-        dismissButton = {
-            TextButton(onClick = { scope.launch { keeper.repo.remove(device.address); onDismiss() } }) { Text("削除", color = ErrorColor) }
-        },
-    )
 }

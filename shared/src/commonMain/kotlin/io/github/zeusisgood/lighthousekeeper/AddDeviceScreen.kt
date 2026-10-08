@@ -11,15 +11,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -59,29 +55,6 @@ fun AddDeviceScreen(keeper: Keeper, onRegistered: (String) -> Unit, onBack: () -
                     }
                 }
             }
-        }
-    }
-}
-
-/** 登録直後の別名入力（スキップ可）。「点滅させる」でどの実機かを確認できる */
-@Composable
-fun AliasScreen(keeper: Keeper, address: String, onDone: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    val device = keeper.devices.collectAsState().value?.find { it.address == address }
-    var alias by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize()) {
-        TopBar("別名を付ける")
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(device?.name ?: address, color = OffColor)
-            OutlinedTextField(alias, { alias = it }, label = { Text("別名（例: 左）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            BigButton("点滅させる", BusyColor, Modifier.fillMaxWidth()) { keeper.power.identify(address) }
-            BigButton("保存", OnColor, Modifier.fillMaxWidth()) {
-                scope.launch {
-                    keeper.repo.rename(address, alias.trim())
-                    onDone()
-                }
-            }
-            BigButton("スキップ", OffColor, Modifier.fillMaxWidth(), onClick = onDone)
         }
     }
 }

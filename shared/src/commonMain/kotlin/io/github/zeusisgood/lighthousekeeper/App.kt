@@ -43,7 +43,7 @@ val TextColor = Color(0xFFE5E7EB)
 sealed interface Screen {
     data object List : Screen
     data object Add : Screen
-    data class Alias(val address: String) : Screen
+    data class Device(val address: String) : Screen
     data object Settings : Screen
     data object Log : Screen
 }
@@ -72,10 +72,10 @@ fun App(
                 else -> when (val s = screen) {
                     Screen.List -> Column {
                         if (!bluetoothGranted) PermissionBanner(onOpenAppSettings)
-                        ListScreen(keeper, onAdd = { screen = Screen.Add }, onSettings = { screen = Screen.Settings })
+                        ListScreen(keeper, onAdd = { screen = Screen.Add }, onSettings = { screen = Screen.Settings }, onDevice = { screen = Screen.Device(it) })
                     }
-                    Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Alias(it) }, onBack = { screen = Screen.List })
-                    is Screen.Alias -> AliasScreen(keeper, s.address, onDone = { screen = Screen.List })
+                    Screen.Add -> AddDeviceScreen(keeper, onRegistered = { screen = Screen.Device(it) }, onBack = { screen = Screen.List })
+                    is Screen.Device -> DeviceScreen(keeper, s.address, onBack = { screen = Screen.List })
                     Screen.Settings -> SettingsScreen(keeper, version, onLog = { screen = Screen.Log }, onBack = { screen = Screen.List })
                     Screen.Log -> LogScreen(onBack = { screen = Screen.Settings })
                 }
