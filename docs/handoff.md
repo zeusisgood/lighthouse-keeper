@@ -24,7 +24,7 @@
 | 対象 | **Androidのみ**（iOSは将来のTODO。ただしBLE/ドメイン層はcommonMainに置き、iOS追加を妨げない構成にする） |
 | minSdk | 31（Android 12） |
 | 永続化 | DataStore |
-| 公開 | 当面は個人利用（private repo想定） |
+| 公開 | GitHub で公開（public repo）。配布は Releases の debug 署名 APK（プレリリース） |
 
 ## 3. BLEプロトコル（実機で確認済み）
 ### GATT
