@@ -18,12 +18,13 @@ fun isV1Name(name: String) = name.startsWith(V1_NAME_PREFIX)
 /**
  * 20バイトのコマンド。`12 [cc] [タイムアウト秒 BE 2バイト] [ID LE 4バイト] 00…`
  * - ON: `12 00 00 00 FFFFFFFF`（無期限で稼働。起動は ID なしでも通る）
- * - OFF: `12 02 00 01 [ID]`（1秒後にスタンバイ。本物の ID が必須）
+ * - OFF: `12 02 00 01 [ID]`（1秒後にスタンバイ）。資料では本物の ID が必須だが、lhctrl の実測では
+ *   ID なし（FFFFFFFF）でも「指定秒数で止まる」とあるので、ID が空なら FFFFFFFF で送る（推測・未検証）
  */
 fun v1Command(on: Boolean, id: String): ByteArray {
     val bytes = ByteArray(20)
     bytes[0] = 0x12
-    val idValue = if (on) 0xFFFFFFFFL else id.toLong(16)
+    val idValue = if (on || id.isBlank()) 0xFFFFFFFFL else id.toLong(16)
     if (!on) {
         bytes[1] = 0x02
         bytes[3] = 0x01

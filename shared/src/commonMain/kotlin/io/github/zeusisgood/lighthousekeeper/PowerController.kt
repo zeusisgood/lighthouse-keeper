@@ -75,10 +75,10 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
         }
         _tasks.update { it + (address to Task(on, now)) }
         _sent.update { it - address }
-        val v1Id = keeper.devices.value?.find { it.address == address }?.takeIf { it.isV1 }?.v1Id
+        val v1Id = keeper.devices.value?.find { it.address == address }?.takeIf { it.isV1 }?.v1Id // 1.0 なら ID（空なら ID なし）
         val timeout = keeper.timeoutSeconds.value.seconds // 1台ごと（設定で 10〜180 秒）
         jobs[address] = scope.launch {
-            Log.add("$address ${on.label()} 開始（タイムアウト ${timeout.inWholeSeconds}秒）")
+            Log.add("$address ${on.label()} 開始（タイムアウト ${timeout.inWholeSeconds}秒${if (v1Id?.isBlank() == true && !on) "、1.0 の ID なし" else ""}）")
             val scanning = launch { keeper.scan.collect {} } // 画面を閉じても処理中はスキャンを続ける
             val ok = withTimeoutOrNull(timeout) {
                 if (v1Id != null) writeV1(address, on, v1Id) else writeUntilConfirmed(address, on)

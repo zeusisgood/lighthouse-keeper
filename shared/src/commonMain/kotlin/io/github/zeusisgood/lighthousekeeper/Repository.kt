@@ -37,6 +37,7 @@ class Repository(path: String) {
 
     suspend fun add(device: Device) = update { list -> if (list.any { it.address == device.address }) list else list + device }
     suspend fun rename(address: String, alias: String) = update { list -> list.map { if (it.address == address) it.copy(alias = alias) else it } }
+    suspend fun setV1Id(address: String, id: String) = update { list -> list.map { if (it.address == address) it.copy(v1Id = id) else it } }
     suspend fun remove(address: String) = update { list -> list.filter { it.address != address } }
 
     private suspend fun update(change: (List<Device>) -> List<Device>) {

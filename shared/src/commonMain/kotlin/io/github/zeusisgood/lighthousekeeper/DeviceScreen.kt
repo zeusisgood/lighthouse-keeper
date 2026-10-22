@@ -36,14 +36,20 @@ fun DeviceScreen(keeper: Keeper, address: String, onBack: () -> Unit) {
     val now by rememberNow()
     var alias by remember { mutableStateOf(device.alias) }
     var confirmRemove by remember { mutableStateOf(false) }
+    var editId by remember { mutableStateOf(false) }
+    val task = tasks[address]
 
     Column(Modifier.fillMaxSize()) {
         TopBar(device.title, onBack = onBack) {
             TextButton(onClick = { confirmRemove = true }) { Text("削除", color = ErrorColor) }
         }
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DeviceCard(device, seen[address], tasks[address], sent[address], now, onToggle = { keeper.power.set(address, it) })
-            Text(if (device.isV1) "$address ・ ID ${device.v1Id} ・ 1.0（未検証）" else address, fontSize = 12.sp, color = OffColor)
+            DeviceCard(device, seen[address], task, sent[address], now, onToggle = { keeper.power.set(address, it) })
+            Text(if (device.isV1) "$address ・ ID ${device.v1Id.ifBlank { "なし" }} ・ 1.0（未検証）" else address, fontSize = 12.sp, color = OffColor)
+            if (device.isV1 && device.v1Id.isBlank() && task?.failed == true && !task.on) {
+                Text("スリープできない場合は、本体IDを入れると直るかもしれません", color = ErrorColor, fontSize = 12.sp)
+            }
+            if (device.isV1) BigButton(if (device.v1Id.isBlank()) "本体IDを入力" else "本体IDを変更", TextColor, Modifier.fillMaxWidth()) { editId = true }
             OutlinedTextField(alias, { alias = it }, label = { Text("別名（例: 左）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             if (!device.isV1) BigButton("点滅させる", BusyColor, Modifier.fillMaxWidth()) { keeper.power.identify(address) } // 1.0 には Identify がない
             BigButton("保存", OnColor, Modifier.fillMaxWidth()) {
@@ -58,6 +64,14 @@ fun DeviceScreen(keeper: Keeper, address: String, onBack: () -> Unit) {
             items(lines.filter { address in it }.asReversed()) {
                 Text(it.replace("$address ", ""), color = TextColor, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(vertical = 2.dp))
             }
+        }
+    }
+
+    if (editId) V1IdDialog(device.name, device.v1Id, confirm = "保存", onDismiss = { editId = false }) {
+        editId = false
+        scope.launch {
+            keeper.repo.setV1Id(address, it)
+            Log.add("$address 本体ID ${it.ifBlank { "なし" }}")
         }
     }
 

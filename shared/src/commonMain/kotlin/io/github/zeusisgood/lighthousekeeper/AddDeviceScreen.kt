@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** ② デバイス追加。スキャンは画面表示中ずっと動いているので、ここでは結果を絞り込むだけ。1.0 は登録前に本体IDを聞く */
+/** ② デバイス追加。スキャンは画面表示中ずっと動いているので、ここでは結果を絞り込むだけ。1.0 は登録前に本体IDを聞く（任意） */
 @Composable
 fun AddDeviceScreen(keeper: Keeper, onRegistered: (String) -> Unit, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -39,7 +39,7 @@ fun AddDeviceScreen(keeper: Keeper, onRegistered: (String) -> Unit, onBack: () -
     fun register(device: Device) {
         scope.launch {
             keeper.repo.add(device)
-            Log.add("${device.address} 登録（${device.name}${if (device.isV1) "、ID ${device.v1Id}" else ""}）")
+            Log.add("${device.address} 登録（${device.name}${if (device.isV1) "、ID ${device.v1Id.ifBlank { "なし" }}" else ""}）")
             onRegistered(device.address)
         }
     }
@@ -69,25 +69,29 @@ fun AddDeviceScreen(keeper: Keeper, onRegistered: (String) -> Unit, onBack: () -
     }
 
     askId?.let { (address, name) ->
-        var input by remember { mutableStateOf("") }
-        val id = normalizeV1Id(input, name)
-        AlertDialog(
-            onDismissRequest = { askId = null },
-            title = { Text("本体IDを入力") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Base Station 1.0 のスリープには、背面ラベルの ID（8桁の英数字）が必要です。先頭4桁だけでも構いません（末尾4桁 ${name.takeLast(4)} は名前から補います）")
-                    Text("1.0 の対応は実機で未検証です", color = OffColor, fontSize = 12.sp)
-                    OutlinedTextField(input, { input = it }, label = { Text("ID") }, singleLine = true, isError = input.isNotBlank() && id == null)
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = id != null, onClick = {
-                    askId = null
-                    register(Device(address, name, v1Id = id!!))
-                }) { Text("登録") }
-            },
-            dismissButton = { TextButton(onClick = { askId = null }) { Text("キャンセル") } },
-        )
+        V1IdDialog(name, "", confirm = "登録", onDismiss = { askId = null }) {
+            askId = null
+            register(Device(address, name, v1Id = it))
+        }
     }
+}
+
+/** 1.0 の本体ID（任意）。空のまま確定すると ID なし。登録時と詳細画面で使う */
+@Composable
+fun V1IdDialog(name: String, initial: String, confirm: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var input by remember { mutableStateOf(initial) }
+    val id = if (input.isBlank()) "" else normalizeV1Id(input, name)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("本体ID（任意）") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("分かれば、背面ラベルの ID（8桁の英数字）を入れてください。先頭4桁だけでも構いません（末尾4桁 ${name.takeLast(4)} は名前から補います）。SteamVR のデバイス一覧の LHB-XXXXXXXX でも確認できます")
+                Text("空のままでも登録できます。入れておくとスリープが確実になります（1.0 の対応は実機で未検証）", color = OffColor, fontSize = 12.sp)
+                OutlinedTextField(input, { input = it }, label = { Text("ID") }, singleLine = true, isError = id == null)
+            }
+        },
+        confirmButton = { TextButton(enabled = id != null, onClick = { onConfirm(id!!) }) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
+    )
 }

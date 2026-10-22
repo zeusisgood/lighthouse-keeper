@@ -15,6 +15,7 @@ class BaseStationV1Test {
     fun commands() {
         assertEquals("12000000ffffffff" + "00".repeat(12), hex(v1Command(on = true, id = "AABBCCDD")))
         assertEquals("12020001ddccbbaa" + "00".repeat(12), hex(v1Command(on = false, id = "AABBCCDD")))
+        assertEquals("12020001ffffffff" + "00".repeat(12), hex(v1Command(on = false, id = ""))) // ID なし
     }
 
     @Test
