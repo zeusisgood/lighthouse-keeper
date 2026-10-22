@@ -10,6 +10,7 @@
 
 ## 1. 概要
 - Valve Lighthouse（SteamVR Base Station 2.0）の電源をBLEでON/スリープ切り替えするAndroidアプリ
+  - 0.3.0 から Base Station 1.0（HTC Vive）にも対応（実機未検証。「3. BLEプロトコル」を参照）
 - 既存OSS（lighthouse_pm）が時々操作できないなど不安定なため自作する。**最優先の価値は「確実に切り替わること」**
 - 機能はON/OFFのみ。SteamVR連動などの自動化はしない。Home Assistant連携もしない
 
@@ -24,7 +25,7 @@
 | 対象 | **Androidのみ**（iOSは将来のTODO。ただしBLE/ドメイン層はcommonMainに置き、iOS追加を妨げない構成にする） |
 | minSdk | 31（Android 12） |
 | 永続化 | DataStore |
-| 公開 | 当面は個人利用（private repo想定） |
+| 公開 | GitHub で公開（public repo）。配布は Releases の debug 署名 APK（プレリリース） |
 
 ## 3. BLEプロトコル（実機で確認済み）
 ### GATT
@@ -55,6 +56,24 @@
 - アドバタイズ間隔は約43ms
 - MACアドレスはstatic random（再起動後も不変）なので、識別子として使ってよい
 - ⚠ この形式は1台でのみ確認済み。パースは防御的に書き、長さ不足や想定外の値は「不明」とする
+
+### Base Station 1.0（HTC Vive）※実機では未検証
+MVP後に追加（0.3.0）。手元に実機がないため、既存OSS（lighthouse_pm / lhctrl / LighthouseRedox / LighthouseESP / OVR-Lighthouse-Manager）のコードと解析資料を突き合わせた内容。
+
+- デバイス名: `HTC BS xyABCD`（xy = MACアドレス末尾1バイト、ABCD = 本体IDの下位4桁）
+- アドバタイズに Service UUID `0xCB00` が載る → スキャンフィルターに使う（Manufacturer Data に電源状態は**載らない**）
+- 本体ID: 背面ラベルの8桁16進（SteamVR のデバイス一覧の `LHB-XXXXXXXX` でも分かる）。**入力は任意**。登録時か詳細画面で入れる（先頭4桁だけなら名前の末尾4桁で補う）
+- GATT: Service `0000cb00-0000-1000-8000-00805f9b34fb` / Characteristic `0000cb01-0000-1000-8000-00805f9b34fb`（WRITE / READ）
+- 書き込み（20バイト）: `12 [cc] [タイムアウト秒 BE 2バイト] [ID LE 4バイト] 00×12`
+  - ON: `12 00 00 00 FF FF FF FF …`（無期限で稼働。起動はIDなしでも通る）
+  - OFF: `12 02 00 01 [ID]`（1秒後にスタンバイ）。例: ID `AABBCCDD` → `12 02 00 01 DD CC BB AA …`
+    - LighthouseRedox では「本物のIDが必須」。一方 lhctrl の実測では、IDなし（`FFFFFFFF`）でも「指定秒数で止まる」とある。そこで **ID が未入力なら `FFFFFFFF` で送る**（推測・未検証）。その台が OFF でエラーになったら、詳細画面に「本体IDを入れると直るかも」と出す
+  - 1.0 は「OFFにする」コマンドを持たず、「N秒後に止まる」指定で止める仕組み
+- 読み戻し: `[エラーコード] 12 [タイムアウト秒 BE 2バイト] 00…`。ON後は `00 12 00 00`、OFF後は `00 12 00 01` になるはず
+  - **1.0 だけ例外として GATT Read を使う**: 書き込んだ同じ接続で読み戻し、受け付けを確認できたら成功（モーターが実際に止まったかまでは分からない）。表示は「ON（送信済み）」「OFF（送信済み）」
+  - 不一致・読み戻し失敗は接続失敗と同じく2秒後に再試行、タイムアウトで「エラー」。10秒変化なし時の書き直しはない（確かめる手段がないため）
+- Identify（点滅）はない
+- B/C モード（光学同期）では C は B に追従する（B を止めると C も止まる）。全台に送っても害はない想定
 
 ## 4. 動作仕様
 ### 状態の取得
@@ -166,7 +185,6 @@
 
 ## 9. MVPに含めないもの（TODO）
 - iOS対応
-- Lighthouse 1.0（HTC Vive）対応
 - スタンバイへの切り替え
 - ウィジェット、Quick Settingsタイル
 - SteamVR連動などの自動化

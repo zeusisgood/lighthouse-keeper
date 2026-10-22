@@ -34,6 +34,8 @@ import kotlin.time.Clock
 val Background = Color(0xFF121417)
 val CardColor = Color(0xFF1E2228)
 val OnColor = Color(0xFF4ADE80)
+/** 1.0 の「ON（送信済み）」。状態を確認できていないので ON より淡くする */
+val SentOnColor = Color(0xFF86EFAC)
 val OffColor = Color(0xFF64748B)
 val BusyColor = Color(0xFF38BDF8)
 val ErrorColor = Color(0xFFF87171)

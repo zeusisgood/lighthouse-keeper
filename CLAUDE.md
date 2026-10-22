@@ -30,6 +30,7 @@ Valve Lighthouse（SteamVR Base Station 2.0）の電源をBLEでON/スリープ�
 ## アーキテクチャの要点（複数ファイルにまたがる設計判断）
 
 - **状態取得はアドバタイズのみ**（GATT Readは使わない）。Manufacturer Data（Company ID `0x055D`）のペイロード インデックス4が電源状態
+  - 例外: Base Station 1.0（`HTC BS`、実機未検証）は状態がアドバタイズに出ないため、書き込み直後に同じ接続で読み戻して受け付けを確認する（`BaseStationV1.kt`）。表示は「送信済み」
 - スキャンは画面表示中は**開始しっぱなし**（Androidの「30秒で5回」制限回避）。必ずManufacturer IDフィルターを付ける
 - 書き込みは1台ごとに独立・並列: 接続 → Powerに書き込み → **即切断** → 以降はアドバタイズで成否を判定
   - ON成功 = `0x09`/`0x0B`、OFF成功 = `0x00`、`0x01` は処理中

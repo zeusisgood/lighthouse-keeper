@@ -8,12 +8,13 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.map
 import okio.Path.Companion.toPath
 
-/** 登録デバイス。並び順＝登録順 */
-data class Device(val address: String, val name: String, val alias: String = "") {
+/** 登録デバイス。並び順＝登録順。v1Id は Base Station 1.0 の本体ID（8桁16進）、2.0 は空 */
+data class Device(val address: String, val name: String, val alias: String = "", val v1Id: String = "") {
     val title get() = alias.ifBlank { name }
+    val isV1 get() = isV1Name(name)
 }
 
-/** DataStore（Preferences）。登録デバイスとタイムアウト設定。登録デバイスは1行1台・タブ区切りの文字列1つで持つ */
+/** DataStore（Preferences）。登録デバイスとタイムアウト設定。登録デバイスは1行1台・タブ区切りの文字列1つで持つ（列がない古いデータは空として読む） */
 class Repository(path: String) {
     private val store = PreferenceDataStoreFactory.createWithPath { path.toPath() }
     private val devicesKey = stringPreferencesKey("devices")
@@ -36,6 +37,7 @@ class Repository(path: String) {
 
     suspend fun add(device: Device) = update { list -> if (list.any { it.address == device.address }) list else list + device }
     suspend fun rename(address: String, alias: String) = update { list -> list.map { if (it.address == address) it.copy(alias = alias) else it } }
+    suspend fun setV1Id(address: String, id: String) = update { list -> list.map { if (it.address == address) it.copy(v1Id = id) else it } }
     suspend fun remove(address: String) = update { list -> list.filter { it.address != address } }
 
     private suspend fun update(change: (List<Device>) -> List<Device>) {
@@ -46,9 +48,9 @@ class Repository(path: String) {
 }
 
 internal fun decode(text: String?) = text.orEmpty().lines().filter { it.isNotBlank() }.map { line ->
-    line.split('\t').let { Device(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }) }
+    line.split('\t').let { Device(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }, it.getOrElse(3) { "" }) }
 }
 
 internal fun encode(devices: List<Device>) = devices.joinToString("\n") { d ->
-    listOf(d.address, d.name, d.alias).joinToString("\t") { it.replace(Regex("[\t\n\r]"), " ") }
+    listOf(d.address, d.name, d.alias, d.v1Id).joinToString("\t") { it.replace(Regex("[\t\n\r]"), " ") }
 }

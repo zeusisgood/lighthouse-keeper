@@ -30,6 +30,7 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit, onDevi
     val devices = keeper.devices.collectAsState().value ?: return
     val seen by keeper.seen.collectAsState()
     val tasks by keeper.power.tasks.collectAsState()
+    val sent by keeper.power.sent.collectAsState()
     val now by rememberNow()
 
     Column(Modifier.fillMaxSize()) {
@@ -51,7 +52,7 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit, onDevi
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(devices, key = { it.address }) { device ->
                     DeviceCard(
-                        device, seen[device.address], tasks[device.address], now,
+                        device, seen[device.address], tasks[device.address], sent[device.address], now,
                         onToggle = { keeper.power.set(device.address, it) },
                         onClick = { onDevice(device.address) },
                     )
@@ -61,10 +62,11 @@ fun ListScreen(keeper: Keeper, onAdd: () -> Unit, onSettings: () -> Unit, onDevi
     }
 }
 
-/** 一覧のカード。詳細画面では onClick なしで状態表示とトグルに使う */
+/** 一覧のカード。詳細画面では onClick なしで状態表示とトグルに使う。1.0 は状態が読めないので、不明のときは最後に受け付けた操作を「送信済み」で出す */
 @Composable
-fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle: (Boolean) -> Unit, onClick: (() -> Unit)? = null) {
+fun DeviceCard(device: Device, seen: Seen?, task: Task?, sent: Sent?, now: Instant, onToggle: (Boolean) -> Unit, onClick: (() -> Unit)? = null) {
     val display = display(seen, task, now)
+    val sentShown = sent?.takeIf { display == Display.Unknown }
     Card(
         colors = CardDefaults.cardColors(containerColor = CardColor),
         modifier = Modifier.fillMaxWidth().clickable(enabled = onClick != null) { onClick?.invoke() },
@@ -74,8 +76,11 @@ fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle:
                 Text(device.title, fontSize = 20.sp, color = TextColor)
                 if (device.alias.isNotBlank()) Text(device.name, fontSize = 12.sp, color = OffColor)
                 Text("最終確認 ${seen?.let { formatTime(it.at) } ?: "-"}", fontSize = 12.sp, color = OffColor)
+                if (sentShown != null) Text("送信 ${formatTime(sentShown.at)}", fontSize = 12.sp, color = OffColor)
             }
-            val (label, color) = when (display) {
+            val (label, color) = if (sentShown != null) {
+                if (sentShown.on) "ON（送信済み）" to SentOnColor else "OFF（送信済み）" to OffColor
+            } else when (display) {
                 Display.On -> "ON" to OnColor
                 Display.Off -> "OFF" to OffColor
                 Display.Busy -> "処理中（${(now - task!!.startedAt).inWholeSeconds}秒）" to BusyColor
@@ -85,7 +90,11 @@ fun DeviceCard(device: Device, seen: Seen?, task: Task?, now: Instant, onToggle:
             Text(label, color = color, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
             Switch(
                 // 処理中・エラーは目標側に倒しておく
-                checked = if (task != null && display != Display.On && display != Display.Off) task.on else display == Display.On,
+                checked = when {
+                    task != null && display != Display.On && display != Display.Off -> task.on
+                    sentShown != null -> sentShown.on
+                    else -> display == Display.On
+                },
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(checkedTrackColor = OnColor),
             )

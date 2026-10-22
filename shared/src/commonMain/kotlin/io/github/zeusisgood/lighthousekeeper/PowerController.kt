@@ -29,6 +29,8 @@ import kotlin.uuid.Uuid
 private val SERVICE = Uuid.parse("00001523-1212-efde-1523-785feabcd124")
 private val POWER = characteristicOf(SERVICE, Uuid.parse("00001525-1212-efde-1523-785feabcd124"))
 private val IDENTIFY = characteristicOf(SERVICE, Uuid.parse("00008421-1212-efde-1523-785feabcd124"))
+/** Base Station 1.0 の電源（書き込み・読み戻しとも同じ Characteristic） */
+private val V1_POWER = characteristicOf(V1_SERVICE, Uuid.parse("0000cb01-0000-1000-8000-00805f9b34fb"))
 
 /** 接続失敗時の再試行間隔 */
 private val CONNECT_RETRY_INTERVAL = 2.seconds
@@ -43,6 +45,9 @@ internal const val SERIAL_CONNECT = false
 /** 処理中 or 失敗した台。成功したら消える */
 data class Task(val on: Boolean, val startedAt: Instant, val failed: Boolean = false)
 
+/** 1.0 で最後に受け付けを確認した操作。電源状態が読めないので「送信済み」として表示する（メモリ上のみ） */
+data class Sent(val on: Boolean, val at: Instant)
+
 fun PowerState.isTarget(on: Boolean) = if (on) this == PowerState.On else this == PowerState.Sleep
 
 /**
@@ -52,6 +57,8 @@ fun PowerState.isTarget(on: Boolean) = if (on) this == PowerState.On else this =
 class PowerController(private val scope: CoroutineScope, private val keeper: Keeper) {
     private val _tasks = MutableStateFlow<Map<String, Task>>(emptyMap())
     val tasks = _tasks.asStateFlow()
+    private val _sent = MutableStateFlow<Map<String, Sent>>(emptyMap())
+    val sent = _sent.asStateFlow()
 
     private val jobs = mutableMapOf<String, Job>()
     private val connectLock = Mutex()
@@ -67,16 +74,21 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
             return
         }
         _tasks.update { it + (address to Task(on, now)) }
+        _sent.update { it - address }
+        val v1Id = keeper.devices.value?.find { it.address == address }?.takeIf { it.isV1 }?.v1Id // 1.0 なら ID（空なら ID なし）
         val timeout = keeper.timeoutSeconds.value.seconds // 1台ごと（設定で 10〜180 秒）
         jobs[address] = scope.launch {
-            Log.add("$address ${on.label()} 開始（タイムアウト ${timeout.inWholeSeconds}秒）")
+            Log.add("$address ${on.label()} 開始（タイムアウト ${timeout.inWholeSeconds}秒${if (v1Id?.isBlank() == true && !on) "、1.0 の ID なし" else ""}）")
             val scanning = launch { keeper.scan.collect {} } // 画面を閉じても処理中はスキャンを続ける
-            val ok = withTimeoutOrNull(timeout) { writeUntilConfirmed(address, on) } != null
+            val ok = withTimeoutOrNull(timeout) {
+                if (v1Id != null) writeV1(address, on, v1Id) else writeUntilConfirmed(address, on)
+            } != null
             scanning.cancel()
             jobs.remove(address)
             if (ok) {
                 Log.add("$address ${on.label()} 成功（${(Clock.System.now() - now).inWholeSeconds}秒）")
                 _tasks.update { it - address }
+                if (v1Id != null) _sent.update { it + (address to Sent(on, Clock.System.now())) }
             } else {
                 Log.add("$address ${on.label()} タイムアウト → エラー")
                 _tasks.update { it + (address to Task(on, now, failed = true)) }
@@ -87,14 +99,14 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
     /** Identify に 0x00 を書いて LED を点滅させる（失敗しても次の操作に影響しないので再試行は短く） */
     fun identify(address: String) {
         scope.launch {
-            withTimeoutOrNull(15.seconds) { connectAndWrite(address, IDENTIFY, 0x00, "点滅") }
+            withTimeoutOrNull(15.seconds) { connectAndWrite(address, IDENTIFY, byteArrayOf(0x00), "点滅") }
                 ?: Log.add("$address 点滅 失敗")
         }
     }
 
     private suspend fun writeUntilConfirmed(address: String, on: Boolean) {
         while (true) {
-            val writtenAt = connectAndWrite(address, POWER, if (on) 0x01 else 0x00, on.label())
+            val writtenAt = connectAndWrite(address, POWER, byteArrayOf(if (on) 0x01 else 0x00), on.label())
             val confirmed = withTimeoutOrNull(REWRITE_AFTER) {
                 keeper.seen.first { val s = it[address]; s != null && s.at > writtenAt && s.raw.isTarget(on) }
             }
@@ -103,8 +115,21 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
         }
     }
 
-    /** 接続 → 書き込み → 即切断。接続・書き込みに失敗したら2秒おきに再試行。書き込んだ時刻を返す */
-    private suspend fun connectAndWrite(address: String, characteristic: Characteristic, value: Int, what: String): Instant {
+    /**
+     * 1.0: アドバタイズで確認できないので、書き込んだ同じ接続で読み戻して受け付けを確認する。
+     * 不一致・読み戻し失敗は接続失敗と同じく2秒後に接続からやり直す（タイムアウトの範囲内）
+     */
+    private suspend fun writeV1(address: String, on: Boolean, id: String) {
+        connectAndWrite(address, V1_POWER, v1Command(on, id), on.label()) { v1Accepted(on, it) }
+    }
+
+    /**
+     * 接続 → 書き込み →（accepted があれば読み戻して確認）→ 即切断。失敗したら2秒おきに再試行。書き込んだ時刻を返す
+     */
+    private suspend fun connectAndWrite(
+        address: String, characteristic: Characteristic, data: ByteArray, what: String,
+        accepted: ((ByteArray) -> Boolean)? = null,
+    ): Instant {
         var attempt = 0
         while (true) {
             attempt++
@@ -112,8 +137,13 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
             try {
                 val connect = suspend { withTimeout(CONNECT_TIMEOUT) { peripheral.connect() } }
                 if (SERIAL_CONNECT) connectLock.withLock { connect() } else connect()
-                peripheral.write(characteristic, byteArrayOf(value.toByte()), WriteType.WithResponse)
-                Log.add("$address $what 書き込み 0x${value.toString(16).padStart(2, '0')}（${attempt}回目）")
+                peripheral.write(characteristic, data, WriteType.WithResponse)
+                Log.add("$address $what 書き込み ${data.toHex()}（${attempt}回目）")
+                if (accepted != null) {
+                    val read = peripheral.read(characteristic)
+                    Log.add("$address $what 読み戻し ${read.toHex()}")
+                    check(accepted(read)) { "読み戻しが想定外" }
+                }
                 return Clock.System.now()
             } catch (e: Exception) {
                 currentCoroutineContext().ensureActive() // 自分がキャンセル・タイムアウトされたなら抜ける
@@ -130,3 +160,5 @@ class PowerController(private val scope: CoroutineScope, private val keeper: Kee
 }
 
 private fun Boolean.label() = if (this) "ON" else "OFF"
+
+private fun ByteArray.toHex() = joinToString(" ") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
