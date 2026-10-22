@@ -69,7 +69,10 @@ class Keeper(private val scope: CoroutineScope, storePath: String) {
      * 購読が切れても5秒は止めない（start/stop の回数制限対策）
      */
     val scan: SharedFlow<Unit> = Scanner {
-        filters { match { manufacturerData = listOf(Filter.ManufacturerData(VALVE_COMPANY_ID, data = null)) } }
+        filters {
+            match { manufacturerData = listOf(Filter.ManufacturerData(VALVE_COMPANY_ID, data = null)) } // 2.0
+            match { services = listOf(V1_SERVICE) } // 1.0（状態は載らないので「不明」のまま。名前と最終確認時刻だけ使う）
+        }
         platformScanSettings()
     }.advertisements
         .onEach { ad ->

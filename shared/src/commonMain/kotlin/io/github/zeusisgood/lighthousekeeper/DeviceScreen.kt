@@ -24,13 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-/** デバイス詳細。登録直後と一覧のカードタップの両方から開く。別名・点滅・個別ON/OFF・このデバイスのログ・削除 */
+/** デバイス詳細。登録直後と一覧のカードタップの両方から開く。別名・点滅（2.0 のみ）・個別ON/OFF・このデバイスのログ・削除 */
 @Composable
 fun DeviceScreen(keeper: Keeper, address: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val device = keeper.devices.collectAsState().value?.find { it.address == address } ?: return
     val seen by keeper.seen.collectAsState()
     val tasks by keeper.power.tasks.collectAsState()
+    val sent by keeper.power.sent.collectAsState()
     val lines by Log.lines.collectAsState()
     val now by rememberNow()
     var alias by remember { mutableStateOf(device.alias) }
@@ -41,10 +42,10 @@ fun DeviceScreen(keeper: Keeper, address: String, onBack: () -> Unit) {
             TextButton(onClick = { confirmRemove = true }) { Text("削除", color = ErrorColor) }
         }
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DeviceCard(device, seen[address], tasks[address], now, onToggle = { keeper.power.set(address, it) })
-            Text(address, fontSize = 12.sp, color = OffColor)
+            DeviceCard(device, seen[address], tasks[address], sent[address], now, onToggle = { keeper.power.set(address, it) })
+            Text(if (device.isV1) "$address ・ ID ${device.v1Id} ・ 1.0（未検証）" else address, fontSize = 12.sp, color = OffColor)
             OutlinedTextField(alias, { alias = it }, label = { Text("別名（例: 左）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            BigButton("点滅させる", BusyColor, Modifier.fillMaxWidth()) { keeper.power.identify(address) }
+            if (!device.isV1) BigButton("点滅させる", BusyColor, Modifier.fillMaxWidth()) { keeper.power.identify(address) } // 1.0 には Identify がない
             BigButton("保存", OnColor, Modifier.fillMaxWidth()) {
                 scope.launch {
                     keeper.repo.rename(address, alias.trim())
